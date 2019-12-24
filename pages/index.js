@@ -1,88 +1,88 @@
-import React from 'react'
-import Head from 'next/head'
-import Nav from '../components/nav'
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 
-const Home = () => (
-  <div>
-    <Head>
-      <title>Home</title>
-      <link rel="icon" href="/favicon.ico" />
-    </Head>
+import { useSSE, SSEProvider } from "react-hooks-sse";
 
-    <Nav />
+const SpeechSynthesis = dynamic(
+  () => import("react-speech-kit").then(mod => mod.SpeechSynthesis),
+  {
+    ssr: false
+  }
+);
 
-    <div className="hero">
-      <h1 className="title">Welcome to Next.js!</h1>
-      <p className="description">
-        To get started, edit <code>pages/index.js</code> and save to reload.
+const baseURL = `https://api.saweria.co/stream?channel=donation.`;
+
+const Speaker = ({ speak, minimum, voices }) => {
+  const [selectedVoiceName, setSelectedVoiceName] = useState("");
+  const event = useSSE("donations");
+
+  const onChange = e => {
+    setSelectedVoiceName(e.target.value);
+  };
+
+  useEffect(() => {
+    if (voices.length > 0) {
+      setSelectedVoiceName(voices[0].name);
+    }
+  }, [voices]);
+
+  useEffect(() => {
+    if (event) {
+      try {
+        const amount = parseInt(event.data.data.amount, 10);
+        if (amount >= minimum) {
+          const text = `${event.data.data.donatee} said: ${event.data.data.message}`;
+          const voice = voices.find(v => v.name === selectedVoiceName);
+          speak({ text, voice });
+        }
+      } catch (error) {
+        console.error(`Can't speak.`);
+      }
+    }
+  }, [event, voices, selectedVoiceName]);
+
+  return (
+    <>
+      <select onChange={onChange} value={selectedVoiceName}>
+        {voices.map(voice => {
+          return <option key={voice.name}>{voice.name}</option>;
+        })}
+      </select>
+      <h1>minimum: {minimum}</h1>
+    </>
+  );
+};
+
+const Home = ({ id }) => {
+  const [minimum, setMinimum] = useState(10000);
+  const onChange = e => {
+    try {
+      setMinimum(parseInt(e.target.value, 10));
+    } catch (error) {
+      setMinimum(0);
+    }
+  };
+  return (
+    <SSEProvider endpoint={`${baseURL}${id}`}>
+      <input value={minimum} onChange={onChange} />
+      <button>Press to activate TTS</button>
+      <p>
+        See https://www.chromestatus.com/feature/5687444770914304 for more
+        details
       </p>
+      <SpeechSynthesis>
+        {({ speak, voices }) => (
+          <Speaker speak={speak} minimum={minimum} voices={voices} />
+        )}
+      </SpeechSynthesis>
+    </SSEProvider>
+  );
+};
 
-      <div className="row">
-        <a href="https://nextjs.org/docs" className="card">
-          <h3>Documentation &rarr;</h3>
-          <p>Learn more about Next.js in the documentation.</p>
-        </a>
-        <a href="https://nextjs.org/learn" className="card">
-          <h3>Next.js Learn &rarr;</h3>
-          <p>Learn about Next.js by following an interactive tutorial!</p>
-        </a>
-        <a
-          href="https://github.com/zeit/next.js/tree/master/examples"
-          className="card"
-        >
-          <h3>Examples &rarr;</h3>
-          <p>Find other example boilerplates on the Next.js GitHub.</p>
-        </a>
-      </div>
-    </div>
+Home.getInitialProps = ({ query }) => {
+  return {
+    id: query["id"]
+  };
+};
 
-    <style jsx>{`
-      .hero {
-        width: 100%;
-        color: #333;
-      }
-      .title {
-        margin: 0;
-        width: 100%;
-        padding-top: 80px;
-        line-height: 1.15;
-        font-size: 48px;
-      }
-      .title,
-      .description {
-        text-align: center;
-      }
-      .row {
-        max-width: 880px;
-        margin: 80px auto 40px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-      }
-      .card {
-        padding: 18px 18px 24px;
-        width: 220px;
-        text-align: left;
-        text-decoration: none;
-        color: #434343;
-        border: 1px solid #9b9b9b;
-      }
-      .card:hover {
-        border-color: #067df7;
-      }
-      .card h3 {
-        margin: 0;
-        color: #067df7;
-        font-size: 18px;
-      }
-      .card p {
-        margin: 0;
-        padding: 12px 0 0;
-        font-size: 13px;
-        color: #333;
-      }
-    `}</style>
-  </div>
-)
-
-export default Home
+export default Home;
